@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from app.ml_model.life.life_insurance import life_predict_premium
-from app.controllers.insurance_controller import pay_life_insurance_premium,pay_flood_insurance_premium,pay_travel_insurance_premium,create_life_details,update_life_details,get_life_details,get_last_flood_payment,get_car_details,create_car_details,update_car_details,pay_car_premium,get_health_details,create_health_details,update_health_details,pay_health_insurance_premium,get_travel_details
+from app.controllers.insurance_controller import pay_life_insurance_premium,pay_flood_insurance_premium,pay_travel_insurance_premium,create_life_details,update_life_details,get_life_details,get_last_flood_payment,get_car_details,create_car_details,update_car_details,pay_car_premium,get_health_details,create_health_details,update_health_details,pay_health_insurance_premium,get_travel_details,user_claims_all,user_claims_request,get_active_policies
 from app.ml_model.flood.flood_insurance import flood_predict_premium
 from app.ml_model.travel.travel_insurance import travel_predict_premium
 from app.ml_model.car.car_insurance import predict_premium
@@ -115,6 +115,20 @@ def update_health():
 def get_health():
     data = request.get_json()
     return get_health_details(data)
+
+@insurance_bp.route('/policies', methods=['POST'])
+def get_policies():
+    data = request.get_json()
+    return get_active_policies(data)
+
+@insurance_bp.route('/claims', methods=['POST'])
+def user_claims():
+    return user_claims_request()
+
+@insurance_bp.route('/claims/all', methods=['POST'])
+def user_claims_find():
+    data = request.get_json()
+    return user_claims_all(data)
 
 # @insurance_bp.route('/login', methods=['POST'])
 # def login():

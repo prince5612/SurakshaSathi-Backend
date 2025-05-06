@@ -1,7 +1,9 @@
-from flask import request, jsonify
+from flask import request, jsonify ,current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app import get_db 
+import os
+from werkzeug.utils import secure_filename
 
 def pay_life_insurance_premium(data):
     data = request.get_json()
@@ -521,3 +523,188 @@ def update_health_details(data):
         return jsonify({'message': 'No existing details found'}), 404
 
     return jsonify({'message': 'Details updated successfully'}), 200
+
+
+
+def sum_user_premiums(email,col):
+    db = get_db()
+    pipeline = [
+        { "$match": { "user_email": email } },
+        { "$group": {
+            "_id": None,
+            "total_premium": { "$sum": "$predicted_premium" }
+        }},
+        { "$project": { "_id": 0, "total_premium": 1 } }
+    ]
+
+    agg_result = list(col.aggregate(pipeline))
+    result = agg_result[0]['total_premium'] if agg_result else 0.0
+    return int(result)
+
+def get_active_policies(data):
+    email = data.get('email') 
+    db = get_db()
+
+
+    Life=db['life_insurance_payments']
+    Travel=db['travel_insurance_payments']
+    Flood=db['flood_insurance_payments']
+    Health=db['health_insurance_payments']
+    Car=db['car_insurance_payments']
+    
+    all_policies = []
+    l1= Life.find_one( {'user_email': email},
+        projection={'_id': 0},
+        sort=[('payment_date', -1)])
+    
+    if(l1):
+        l1['type']="Life"
+        l1['total_premium']=sum_user_premiums(email,Life)
+        all_policies.append(l1)
+
+    t1=Travel.find_one({'user_email': email},
+       projection={'_id': 0},
+        sort=[('payment_date', -1)])
+    
+    if(t1):
+        t1['type']="Travel"
+        t1['total_premium']=sum_user_premiums(email,Travel)
+        all_policies.append(t1)
+
+    h1=Health.find_one({'user_email': email},
+       projection={'_id': 0},
+        sort=[('payment_date', -1)])
+
+    if(h1):
+        h1['type']="Health"
+        h1['total_premium']=sum_user_premiums(email,Health)
+        all_policies.append(h1)
+    
+    c1=Car.find_one({'user_email': email},
+       projection={'_id': 0},
+        sort=[('payment_date', -1)])
+    
+    if(c1):
+        c1['type']="Car"
+        c1['total_premium']=sum_user_premiums(email,Car)
+        all_policies.append(c1)
+    
+    f1=Flood.find_one({'user_email': email},
+       projection={'_id': 0},
+        sort=[('payment_date', -1)])
+    if(f1):
+        f1['type']="Flood"
+        f1['total_premium']=sum_user_premiums(email,Flood)
+        all_policies.append(f1)
+    
+    print(all_policies)
+
+    return jsonify({"policies": all_policies}), 200
+
+# def user_claims_request():
+#     # email     = data.get('email')
+#     # policy_type = data.get('type')
+#     # files=data.get('files')
+#     email       = request.form.get('email')
+#     policy_type = request.form.get('policy_type')
+#     files       = request.files.getlist('documents')
+#     if not all([email, policy_type,files]):
+#         return jsonify(message="Missing required form fields"), 400
+#     db = get_db()
+#     cr = {
+#         'user_email': email,
+#         'type': policy_type,
+#         'status': 'Pending',
+#         'date': datetime.utcnow(),
+#         'documents': []   # we'll update this below
+#     }
+    
+#     result = db['claims_requests'].insert_one(cr)
+#     claim_id = str(result.inserted_id)
+
+#     # 2) Save files to disk & build a metadata list
+#     upload_root = current_app.config['UPLOAD_FOLDER']
+#     claim_folder = os.path.join(upload_root, claim_id)
+#     os.makedirs(claim_folder, exist_ok=True)
+
+#     docs_info = []
+#     for f in files:
+#         filename = secure_filename(f.filename)
+#         save_path = os.path.join(claim_folder, filename)
+#         f.save(save_path)
+#         docs_info.append({
+#             'filename':    filename,
+#             'path':        save_path,
+#             'uploaded_at': datetime.utcnow()
+#         })
+
+#     # 3) Update the record with the serializable metadata
+#     db['claims_requests'].update_one(
+#         {'_id': result.inserted_id},
+#         {'$set': {'documents': docs_info}}
+#     )
+
+#     return jsonify(message="Claim submitted"), 201
+
+def user_claims_request():
+    email       = request.form.get('email')
+    policy_type = request.form.get('policy_type')
+    files       = request.files.getlist('documents')
+    if not all([email, policy_type, files]):
+        return jsonify(message="Missing required form fields"), 400
+
+    db = get_db()
+    cr = {
+        'user_email': email,
+        'type': policy_type,
+        'status': 'Pending',
+        'date': datetime.utcnow(),
+        'documents': []
+    }
+    result = db['claims_requests'].insert_one(cr)
+    claim_id = str(result.inserted_id)
+
+    upload_root = current_app.config['UPLOAD_FOLDER']
+    claim_folder = os.path.join(upload_root, claim_id)
+    os.makedirs(claim_folder, exist_ok=True)
+
+    docs_info = []
+    for f in files:
+        filename = secure_filename(f.filename)
+        save_path = os.path.join(claim_folder, filename)
+        f.save(save_path)
+        docs_info.append({
+            'filename': filename,
+            'path': save_path,
+            'uploaded_at': datetime.utcnow()
+        })
+
+    db['claims_requests'].update_one(
+        {'_id': result.inserted_id},
+        {'$set': {'documents': docs_info}}
+    )
+
+    return jsonify({
+        "message": "Claim submitted",
+        "claim_id": claim_id
+    }), 201
+
+def user_claims_all(data):
+    email = data['email']
+    print(email)
+
+    db = get_db()
+    claims_col=db['claims_requests']
+
+    # fetch user details
+    claims = claims_col.find({'user_email': email}, {'_id': 0})
+
+    result = []
+    for claim in claims:
+        result.append({
+            'type': claim.get('type'),
+            'status': claim.get('status'),
+            'request_date': claim.get('date'),
+        })
+    print(result)
+    return jsonify(result), 200
