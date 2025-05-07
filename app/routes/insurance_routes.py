@@ -64,7 +64,7 @@ def get_travel():
     return get_travel_details(data)
 
 @insurance_bp.route('/car/gps', methods=['POST'])
-def car_premium():
+def car_gps():
     data = request.get_json()
     return receive_gps()
 
