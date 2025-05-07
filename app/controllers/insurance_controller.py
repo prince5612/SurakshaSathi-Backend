@@ -305,6 +305,7 @@ def create_car_details(data):
         'car_price_lakhs': data['car_price_lakhs'],
         'city': data['city'],
         'user_age': data['user_age'],
+        'device_id':data['device_id'],
         'created_at': datetime.utcnow(),
         'updated_at': datetime.utcnow()
     }
@@ -333,6 +334,7 @@ def update_car_details(data):
             'car_price_lakhs': data['car_price_lakhs'],
             'city': data['city'],
             'user_age': data['user_age'],
+            'device_id':data['device_id'],
             'updated_at': datetime.utcnow()
         }}
     )

@@ -262,50 +262,125 @@ def get_weather_category(city_name: str) -> str:
     main = resp.json()["weather"][0]["main"]
     return _weather_map.get(main, "sunny")
 
-# --- Premium prediction function ---
+# # --- Premium prediction function ---
+# def predict_premium(input_data: dict):
+#     """
+#     Given input_data with keys:
+#       - manufacturer_date: 'YYYY-MM-DD'
+#       - car_price_lakhs: float
+#       - user_age: int
+#     And either:
+#       - 'weather': one of 'rain','fog','snow','sunny'
+#       - 'city': city name string to fetch weather
+#     Returns:
+#       dict {"yearly_premium": float} or (dict, status_code) on error.
+#     """
+#     # Determine weather
+#     if 'city' in input_data:
+#         input_data['weather'] = get_weather_category(input_data['city'])
+#     if 'weather' not in input_data:
+#         return {"error": "Must provide 'weather' or 'city'"}, 400
+
+#     print(input_data["weather"])
+#     # Fetch average driver score
+#     pipeline = [{"$group": {"_id": None, "avgScore": {"$avg": "$score"}}}]
+#     res = list(driver_score_coll.aggregate(pipeline))
+#     if not res:
+#         return {"error": "No driver_score data"}, 500
+#     avg_score = res[0]["avgScore"]
+#     print(avg_score)
+
+#     # Encode features
+#     ord_date = pd.to_datetime(input_data['manufacturer_date']).toordinal()
+#     weather_val = weather_le.transform([input_data['weather']])[0]
+#     features = {
+#         'manufacturer_date': ord_date,
+#         'car_price_lakhs':   input_data['car_price_lakhs'],
+#         'user_age':          input_data['user_age'],
+#         'driver_score':      avg_score,
+#         'weather':           weather_val
+#     }
+#     df_row = pd.DataFrame([features], columns=X_train.columns)
+
+#     # Predict
+#     premium = model.predict(df_row)[0]
+#     print(premium)
+#     return {"predicted_premium": float(round(premium, 2))}
+
 def predict_premium(input_data: dict):
     """
     Given input_data with keys:
       - manufacturer_date: 'YYYY-MM-DD'
       - car_price_lakhs: float
       - user_age: int
+      - device_id: string
     And either:
       - 'weather': one of 'rain','fog','snow','sunny'
       - 'city': city name string to fetch weather
-    Returns:
-      dict {"yearly_premium": float} or (dict, status_code) on error.
+    Returns JSON-safe dict:
+      {
+        "predicted_premium": float,
+        "features": {
+           "manufacturer_date": int,
+           "car_price_lakhs": float,
+           "user_age": int,
+           "driver_score": float,
+           "weather": int
+        }
+      }
+    Or (dict, status_code) on error.
     """
-    # Determine weather
-    if 'city' in input_data:
-        input_data['weather'] = get_weather_category(input_data['city'])
-    if 'weather' not in input_data:
+    # require device_id
+    device_id = input_data.get("device_id")
+    if not device_id:
+        return {"error": "Must provide 'device_id'"}, 400
+
+    # determine weather if needed
+    if "city" in input_data:
+        input_data["weather"] = get_weather_category(input_data["city"])
+    if "weather" not in input_data:
         return {"error": "Must provide 'weather' or 'city'"}, 400
 
-    print(input_data["weather"])
-    # Fetch average driver score
-    pipeline = [{"$group": {"_id": None, "avgScore": {"$avg": "$score"}}}]
+    # compute average driver score for this device
+    pipeline = [
+        {"$match": {"device_id": device_id}},
+        {"$group": {"_id": None, "avgScore": {"$avg": "$score"}}}
+    ]
     res = list(driver_score_coll.aggregate(pipeline))
     if not res:
-        return {"error": "No driver_score data"}, 500
-    avg_score = res[0]["avgScore"]
-    print(avg_score)
+        return {"error": f"No driver_score data for device_id={device_id}"}, 404
 
-    # Encode features
-    ord_date = pd.to_datetime(input_data['manufacturer_date']).toordinal()
-    weather_val = weather_le.transform([input_data['weather']])[0]
+    # cast avgScore to Python float
+    avg_score = float(res[0]["avgScore"])
+
+    # encode features
+    # ensure ord_date is Python int
+    ord_date = int(pd.to_datetime(input_data["manufacturer_date"]).toordinal())
+    # label‑encoder returns a numpy.int64 – cast to int
+    weather_val = int(weather_le.transform([input_data["weather"]])[0])
+
+    # build a pure‑Python features dict
     features = {
-        'manufacturer_date': ord_date,
-        'car_price_lakhs':   input_data['car_price_lakhs'],
-        'user_age':          input_data['user_age'],
-        'driver_score':      avg_score,
-        'weather':           weather_val
+        "manufacturer_date": ord_date,
+        "car_price_lakhs": float(input_data["car_price_lakhs"]),
+        "user_age": int(input_data["user_age"]),
+        "driver_score": avg_score,
+        "weather": weather_val
     }
+
+    # build DataFrame row in correct column order
     df_row = pd.DataFrame([features], columns=X_train.columns)
 
-    # Predict
+    # predict (model may return numpy type)
     premium = model.predict(df_row)[0]
-    print(premium)
-    return {"predicted_premium": float(round(premium, 2))}
+    premium_py = float(round(premium, 2))
+
+    # return only native Python types
+    return {
+        "predicted_premium": premium_py,
+        "features": features
+    }
+
 
 
 
