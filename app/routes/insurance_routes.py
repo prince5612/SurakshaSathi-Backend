@@ -3,7 +3,7 @@ from app.ml_model.life.life_insurance import life_predict_premium
 from app.controllers.insurance_controller import pay_life_insurance_premium,pay_flood_insurance_premium,pay_travel_insurance_premium,create_life_details,update_life_details,get_life_details,get_last_flood_payment,get_car_details,create_car_details,update_car_details,pay_car_premium,get_health_details,create_health_details,update_health_details,pay_health_insurance_premium,get_travel_details,user_claims_all,user_claims_request,get_active_policies,get_payment_history,count_approved_claims
 from app.ml_model.flood.flood_insurance import flood_predict_premium
 from app.ml_model.travel.travel_insurance import travel_predict_premium
-from app.ml_model.car.car_insurance import predict_premium
+from app.ml_model.car.car_insurance import predict_premium,receive_gps
 from app.ml_model.health.health_insurance import health_predict_premium
 
 insurance_bp = Blueprint('insurance_bp', __name__)
@@ -62,6 +62,11 @@ def travel_pay():
 def get_travel():
     data = request.get_json()
     return get_travel_details(data)
+
+@insurance_bp.route('/car/gps', methods=['POST'])
+def car_premium():
+    data = request.get_json()
+    return receive_gps()
 
 @insurance_bp.route('/car/premium', methods=['POST'])
 def car_premium():
