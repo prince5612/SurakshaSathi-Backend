@@ -4,6 +4,7 @@ from datetime import datetime
 from app import get_db 
 import os
 from werkzeug.utils import secure_filename
+import cloudinary.uploader
 
 def pay_life_insurance_premium(data):
     data = request.get_json()
@@ -601,28 +602,25 @@ def get_active_policies(data):
 
     return jsonify({"policies": all_policies}), 200
 
+
 # def user_claims_request():
-#     # email     = data.get('email')
-#     # policy_type = data.get('type')
-#     # files=data.get('files')
 #     email       = request.form.get('email')
 #     policy_type = request.form.get('policy_type')
 #     files       = request.files.getlist('documents')
-#     if not all([email, policy_type,files]):
+#     if not all([email, policy_type, files]):
 #         return jsonify(message="Missing required form fields"), 400
+
 #     db = get_db()
 #     cr = {
 #         'user_email': email,
 #         'type': policy_type,
 #         'status': 'Pending',
 #         'date': datetime.utcnow(),
-#         'documents': []   # we'll update this below
+#         'documents': []
 #     }
-    
 #     result = db['claims_requests'].insert_one(cr)
 #     claim_id = str(result.inserted_id)
 
-#     # 2) Save files to disk & build a metadata list
 #     upload_root = current_app.config['UPLOAD_FOLDER']
 #     claim_folder = os.path.join(upload_root, claim_id)
 #     os.makedirs(claim_folder, exist_ok=True)
@@ -633,23 +631,26 @@ def get_active_policies(data):
 #         save_path = os.path.join(claim_folder, filename)
 #         f.save(save_path)
 #         docs_info.append({
-#             'filename':    filename,
-#             'path':        save_path,
+#             'filename': filename,
+#             'path': save_path,
 #             'uploaded_at': datetime.utcnow()
 #         })
 
-#     # 3) Update the record with the serializable metadata
 #     db['claims_requests'].update_one(
 #         {'_id': result.inserted_id},
 #         {'$set': {'documents': docs_info}}
 #     )
 
-#     return jsonify(message="Claim submitted"), 201
+#     return jsonify({
+#         "message": "Claim submitted",
+#         "claim_id": claim_id
+#     }), 201
 
 def user_claims_request():
-    email       = request.form.get('email')
+    email = request.form.get('email')
     policy_type = request.form.get('policy_type')
-    files       = request.files.getlist('documents')
+    files = request.files.getlist('documents')
+
     if not all([email, policy_type, files]):
         return jsonify(message="Missing required form fields"), 400
 
@@ -659,35 +660,39 @@ def user_claims_request():
         'type': policy_type,
         'status': 'Pending',
         'date': datetime.utcnow(),
-        'documents': []
+        'documents': []  # to be updated after upload
     }
+
     result = db['claims_requests'].insert_one(cr)
     claim_id = str(result.inserted_id)
-
-    upload_root = current_app.config['UPLOAD_FOLDER']
-    claim_folder = os.path.join(upload_root, claim_id)
-    os.makedirs(claim_folder, exist_ok=True)
 
     docs_info = []
     for f in files:
         filename = secure_filename(f.filename)
-        save_path = os.path.join(claim_folder, filename)
-        f.save(save_path)
+
+        # Upload file to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+        f.stream,
+        resource_type="raw",  # use "image" if you're sure it's an image
+        folder=f"claims/{claim_id}/"
+        )
         docs_info.append({
-            'filename': filename,
-            'path': save_path,
-            'uploaded_at': datetime.utcnow()
+        'filename': f.filename,
+        'cloudinary_url': upload_result['secure_url'],
+        'uploaded_at': datetime.utcnow()
         })
 
+    # Update MongoDB with Cloudinary file info
     db['claims_requests'].update_one(
         {'_id': result.inserted_id},
         {'$set': {'documents': docs_info}}
     )
 
     return jsonify({
-        "message": "Claim submitted",
-        "claim_id": claim_id
+         "message": "Claim submitted",
+         "claim_id": claim_id
     }), 201
+
 
 def user_claims_all(data):
     email = data['email']

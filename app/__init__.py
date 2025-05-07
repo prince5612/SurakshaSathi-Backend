@@ -47,10 +47,10 @@ def create_app():
     )
     mail.init_app(app)
 
-    UPLOAD_FOLDER = os.path.join(app.root_path, 'uploads')
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
+    # UPLOAD_FOLDER = os.path.join(app.root_path, 'uploads')
+    # os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    # app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 
 
     from app.routes.user_routes import user_bp
     
