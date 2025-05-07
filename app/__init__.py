@@ -20,7 +20,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object('app.config.Config')
 
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": "https://suraksha-sathi-frontend.vercel.app"}}, supports_credentials=True)
 
     bcrypt.init_app(app)
     jwt.init_app(app)
