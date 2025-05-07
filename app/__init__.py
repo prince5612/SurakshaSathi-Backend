@@ -62,6 +62,10 @@ def create_app():
 
     from app.routes.notifications_routes import notif_bp
     app.register_blueprint(notif_bp,url_prefix="/api/notif")
+
+    # Register Admin Blueprint
+    from app.routes.admin_routes import admin_bp
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
     return app
 
 def get_db():

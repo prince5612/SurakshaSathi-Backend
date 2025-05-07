@@ -119,3 +119,30 @@ def send_claim_acknowledgement(user_email, claim_id):
 
     # 3) Mark that notification as sent
     mark_sent(nid)
+
+# app/controllers/notifications.py
+
+def send_claim_status_notification(user_email, claim_id, new_status):
+    """
+    Send an email (and record a notification) when a claim is approved/rejected.
+    """
+    # 1) record the notification
+    nid = create_notification(
+      user_email,
+      "claim_status",
+      {"claim_id": claim_id, "new_status": new_status},
+      ["email"]
+    )
+
+    # 2) craft & send the email
+    subject = f"Your claim {claim_id} has been {new_status}"
+    html = f"""
+      <p>Dear user,</p>
+      <p>Your claim <strong>{claim_id}</strong> has been <strong>{new_status}</strong>.</p>
+      <p>You can log into your dashboard to see more details.</p>
+      <p>Thank you,<br/>SurakshaSathi Team</p>
+    """
+    send_email(user_email, subject, html)
+
+    # 3) mark our notification record as sent
+    mark_sent(nid)

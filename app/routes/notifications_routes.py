@@ -1,8 +1,9 @@
 # app/routes/notifications_routes.py
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
-from app.controllers.notifications import premium_reminder_job,send_claim_acknowledgement
+from app.controllers.notifications import premium_reminder_job,send_claim_acknowledgement,send_claim_status_notification
 from app import get_db
+from datetime import datetime
 
 notif_bp = Blueprint('notifications', __name__, url_prefix='/api/notifications')
 
@@ -63,5 +64,6 @@ def test_email():
         return jsonify({"message": "Email sent successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 

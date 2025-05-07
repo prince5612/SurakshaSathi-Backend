@@ -341,27 +341,6 @@ def update_car_details(data):
 
     return jsonify({'message': 'Details updated'}), 200
 
-
-
-# def calculate_car_premium(data):
-#     """
-#     Compute a premium based on car details.
-#     Request JSON: { manufacturer_date, car_price_lakhs, city, user_age }
-#     Response JSON: { predicted_premium: float }
-#     """
-    
-#     try:
-#         price = float(data.get('car_price_lakhs', 0))
-#         age = int(data.get('user_age', 0))
-#     except (TypeError, ValueError):
-#         return jsonify({'error': 'Invalid numeric values'}), 400
-
-#     premium=
-
-#     return jsonify({'predicted_premium': premium}), 200
-
-
-
 def pay_car_premium(data):
     """
     Record a premium payment.
@@ -603,97 +582,6 @@ def get_active_policies(data):
     return jsonify({"policies": all_policies}), 200
 
 
-# def user_claims_request():
-#     email       = request.form.get('email')
-#     policy_type = request.form.get('policy_type')
-#     files       = request.files.getlist('documents')
-#     if not all([email, policy_type, files]):
-#         return jsonify(message="Missing required form fields"), 400
-
-#     db = get_db()
-#     cr = {
-#         'user_email': email,
-#         'type': policy_type,
-#         'status': 'Pending',
-#         'date': datetime.utcnow(),
-#         'documents': []
-#     }
-#     result = db['claims_requests'].insert_one(cr)
-#     claim_id = str(result.inserted_id)
-
-#     upload_root = current_app.config['UPLOAD_FOLDER']
-#     claim_folder = os.path.join(upload_root, claim_id)
-#     os.makedirs(claim_folder, exist_ok=True)
-
-#     docs_info = []
-#     for f in files:
-#         filename = secure_filename(f.filename)
-#         save_path = os.path.join(claim_folder, filename)
-#         f.save(save_path)
-#         docs_info.append({
-#             'filename': filename,
-#             'path': save_path,
-#             'uploaded_at': datetime.utcnow()
-#         })
-
-#     db['claims_requests'].update_one(
-#         {'_id': result.inserted_id},
-#         {'$set': {'documents': docs_info}}
-#     )
-
-#     return jsonify({
-#         "message": "Claim submitted",
-#         "claim_id": claim_id
-#     }), 201
-
-def user_claims_request():
-    email = request.form.get('email')
-    policy_type = request.form.get('policy_type')
-    files = request.files.getlist('documents')
-
-    if not all([email, policy_type, files]):
-        return jsonify(message="Missing required form fields"), 400
-
-    db = get_db()
-    cr = {
-        'user_email': email,
-        'type': policy_type,
-        'status': 'Pending',
-        'date': datetime.utcnow(),
-        'documents': []  # to be updated after upload
-    }
-
-    result = db['claims_requests'].insert_one(cr)
-    claim_id = str(result.inserted_id)
-
-    docs_info = []
-    for f in files:
-        filename = secure_filename(f.filename)
-
-        # Upload file to Cloudinary
-        upload_result = cloudinary.uploader.upload(
-        f.stream,
-        resource_type="raw",  # use "image" if you're sure it's an image
-        folder=f"claims/{claim_id}/"
-        )
-        docs_info.append({
-        'filename': f.filename,
-        'cloudinary_url': upload_result['secure_url'],
-        'uploaded_at': datetime.utcnow()
-        })
-
-    # Update MongoDB with Cloudinary file info
-    db['claims_requests'].update_one(
-        {'_id': result.inserted_id},
-        {'$set': {'documents': docs_info}}
-    )
-
-    return jsonify({
-         "message": "Claim submitted",
-         "claim_id": claim_id
-    }), 201
-
-
 def user_claims_all(data):
     email = data['email']
     print(email)
@@ -713,3 +601,110 @@ def user_claims_all(data):
         })
     print(result)
     return jsonify(result), 200
+
+def user_claims_request():
+    email       = request.form.get('email')
+    policy_type = request.form.get('policy_type')
+    files       = request.files.getlist('documents')
+    if not all([email, policy_type, files]):
+        return jsonify(message="Missing required form fields"), 400
+
+    db = get_db()
+    cr = {
+        'user_email': email,
+        'type': policy_type,
+        'status': 'Pending',
+        'date': datetime.utcnow(),
+        'documents': []
+    }
+    result = db['claims_requests'].insert_one(cr)
+    claim_id = str(result.inserted_id)
+
+    docs_info = []
+    for f in files:
+        filename = secure_filename(f.filename)
+        file_ext = os.path.splitext(filename)[1]
+
+        # upload to Cloudinary, force PDF delivery
+        upload_result = cloudinary.uploader.upload(
+            f,                            # the file object
+            resource_type="raw", 
+            folder=f"claims/{claim_id}/",
+            format="pdf"                  # ← ensure deliverable as PDF
+        )
+
+        docs_info.append({
+            'filename': filename,
+            'url': upload_result['secure_url'],
+            'uploaded_at': datetime.utcnow().isoformat(),
+            'extension': file_ext
+        })
+
+    # update record with Cloudinary URLs
+    db['claims_requests'].update_one(
+        {'_id': result.inserted_id},
+        {'$set': {'documents': docs_info}}
+    )
+
+    return jsonify({
+        "message": "Claim submitted with files",
+        "claim_id": claim_id,
+        "documents": docs_info
+    }), 201
+
+def get_payment_history(data):
+    """
+    POST /api/insurance/payments/history
+    Body: { "email": "user@example.com" }
+    Returns:
+      {
+        "Life":    [ { "date": "...", "amount": 500 }, … ],
+        "Car":     [ … ],
+        "Health":  [ … ],
+        "Flood":   [ … ],
+        "Travel":  [ … ]
+      }
+    """
+    email = data.get("email")
+    if not email:
+        return jsonify({"message": "email required"}), 400
+
+    db = get_db()
+    policy_collections = {
+        "Life": "life_insurance_payments",
+        "Car": "car_insurance_payments",
+        "Health": "health_insurance_payments",
+        "Flood": "flood_insurance_payments",
+        "Travel": "travel_insurance_payments"
+    }
+
+    history = {}
+    for policy_name, coll in policy_collections.items():
+        docs = db[coll].find({"user_email": email}).sort("payment_date", 1)
+        history[policy_name] = [
+            {
+              "date": doc["payment_date"].isoformat(),
+              "amount": doc.get("predicted_premium", doc.get("amount", 0))
+            }
+            for doc in docs
+        ]
+    return jsonify(history),200
+
+
+def count_approved_claims(data):
+    """
+    POST /api/insurance/claims/count
+    Body: { "email": "user@example.com" }
+    Response: { "approved_count": 3 }
+    """
+    
+    email = data.get("email")
+    if not email:
+        return jsonify({"message": "email required"}), 400
+
+    db = get_db()
+    count = db.claims_requests.count_documents({
+        "user_email": email,
+        "status": "Approved"
+    })
+    return jsonify({"approved_count":count}),200
