@@ -300,7 +300,7 @@ def compute_driver_score(device_id: str,
     # Persist score if trip duration exceeds threshold
     if pts:
         trip_duration = pts[-1]["t"] - pts[0]["t"]
-        if trip_duration >= 60:  # 60 seconds
+        if trip_duration >= 5*60:  # 5 min
             store_score_to_db(device_id, score)
             reset_trip(device_id)
             user_score[device_id] = score
